@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+# python 3.9.3
 try:
     import json
 except ImportError:
@@ -109,24 +109,24 @@ class RedisWrapper(redis.Redis):
             # rounds the expiration time down always
             return p.expireat(key, int(time))
 
-def client(host='localhost', port=6379, password=None, db=0,
+def client(host='localhost', port=6379, password=None, ssl=False, ssl_cert_reqs=None, db=0,
                  unix_socket_path=None, encoding='utf-8'):
     if unix_socket_path is not None:
         r = RedisWrapper(unix_socket_path=unix_socket_path,
-                        password=password,
+                        password=password, ssl=ssl, ssl_cert_reqs=ssl_cert_reqs,
                         db=db,
                         charset=encoding)
     else:
         r = RedisWrapper(host=host,
                         port=port,
-                        password=password,
+                        password=password, ssl=ssl, ssl_cert_reqs=ssl_cert_reqs,
                         db=db,
                         charset=encoding)
     return r
 
-def dumps(host='localhost', port=6379, password=None, db=0, pretty=False,
+def dumps(host='localhost', port=6379, password=None, ssl=False, ssl_cert_reqs=None, db=0, pretty=False,
           unix_socket_path=None, encoding='utf-8', keys='*'):
-    r = client(host=host, port=port, password=password, db=db,
+    r = client(host=host, port=port, password=password, ssl=ssl, ssl_cert_reqs=ssl_cert_reqs, db=db,
                unix_socket_path=unix_socket_path, encoding=encoding)
     kwargs = {}
     if not pretty:
@@ -146,25 +146,25 @@ def dumps(host='localhost', port=6379, password=None, db=0, pretty=False,
 class BytesWriteWrapper(object):
     def __init__(self, stream):
         self.stream = stream
-        
+
     def write(self, str):
         return self.stream.write(str.encode())
 
-def dump(fp, host='localhost', port=6379, password=None, db=0, pretty=False,
+def dump(fp, host='localhost', port=6379, password=None, ssl=False, ssl_cert_reqs=None, db=0, pretty=False,
          unix_socket_path=None, encoding='utf-8', keys='*'):
-    
+
     try:
         fp.write('')
     except TypeError:
         fp = BytesWriteWrapper(fp)
-    
+
     if pretty:
         # hack to avoid implementing pretty printing
-        fp.write(dumps(host=host, port=port, password=password, db=db,
+        fp.write(dumps(host=host, port=port, password=password, ssl=False, ssl_cert_reqs=None, db=db,
             pretty=pretty, encoding=encoding, keys=keys))
         return
 
-    r = client(host=host, port=port, password=password, db=db,
+    r = client(host=host, port=port, password=password, ssl=ssl, ssl_cert_reqs=ssl_cert_reqs, db=db,
                unix_socket_path=unix_socket_path, encoding=encoding)
     kwargs = {}
     if not pretty:
@@ -308,9 +308,9 @@ def _empty(r):
     for key in r.keys():
         r.delete(key)
 
-def loads(s, host='localhost', port=6379, password=None, db=0, empty=False,
+def loads(s, host='localhost', port=6379, password=None, ssl=False, ssl_cert_reqs=None, db=0, empty=False,
           unix_socket_path=None, encoding='utf-8', use_expireat=False):
-    r = client(host=host, port=port, password=password, db=db,
+    r = client(host=host, port=port, password=password, ssl=ssl, ssl_cert_reqs=ssl_cert_reqs, db=db,
                unix_socket_path=unix_socket_path, encoding=encoding)
     if empty:
         _empty(r)
@@ -325,9 +325,10 @@ def loads(s, host='localhost', port=6379, password=None, db=0, empty=False,
         value = item['value']
         ttl = item.get('ttl')
         expireat = item.get('expireat')
+        print(key, type, ttl, p)
         _writer(r, p, key, type, value, ttl, expireat, use_expireat=use_expireat)
         # Increase counter until 10 000...
-        counter = (counter + 1) % 10000
+        counter = (counter + 1) % 100
         # ... then execute:
         if not counter:
             p.execute()
@@ -335,7 +336,7 @@ def loads(s, host='localhost', port=6379, password=None, db=0, empty=False,
         # Finally, execute again:
         p.execute()
 
-def load_lump(fp, host='localhost', port=6379, password=None, db=0,
+def load_lump(fp, host='localhost', port=6379, password=None, ssl=False, ssl_cert_reqs=None, db=0,
     empty=False, unix_socket_path=None, encoding='utf-8', use_expireat=False,
 ):
     s = fp.read()
@@ -344,7 +345,7 @@ def load_lump(fp, host='localhost', port=6379, password=None, db=0,
         # if bytes, decode to a string because loads requires input to be a string.
         if isinstance(s, bytes):
             s = s.decode(encoding)
-    loads(s, host, port, password, db, empty, unix_socket_path, encoding, use_expireat=use_expireat)
+    loads(s, host, port, password, ssl, ssl_cert_reqs, db, empty, unix_socket_path, encoding, use_expireat=use_expireat)
 
 def get_ijson(local_streaming_backend):
     if local_streaming_backend:
@@ -377,14 +378,14 @@ def ijson_top_level_items(file, local_streaming_backend):
 class TextReadWrapper(object):
     def __init__(self, fp):
         self.fp = fp
-        
+
     def read(self, *args, **kwargs):
         return self.fp.read(*args, **kwargs).decode()
 
 class BytesReadWrapper(object):
     def __init__(self, fp):
         self.fp = fp
-        
+
     def read(self, *args, **kwargs):
         return self.fp.read(*args, **kwargs).encode('utf-8')
 
@@ -426,13 +427,13 @@ def create_loader(fp, streaming_backend=None):
 
     return loader
 
-def load_streaming(fp, host='localhost', port=6379, password=None, db=0,
+def load_streaming(fp, host='localhost', port=6379, password=None, ssl=False, ssl_cert_reqs=None, db=0,
     empty=False, unix_socket_path=None, encoding='utf-8', use_expireat=False,
     streaming_backend=None,
 ):
     loader = create_loader(fp, streaming_backend)
 
-    r = client(host=host, port=port, password=password, db=db,
+    r = client(host=host, port=port, password=password, ssl=ssl, ssl_cert_reqs=ssl_cert_reqs, db=db,
                unix_socket_path=unix_socket_path, encoding=encoding)
 
     counter = 0
@@ -454,16 +455,16 @@ def load_streaming(fp, host='localhost', port=6379, password=None, db=0,
         # Finally, execute again:
         p.execute()
 
-def load(fp, host='localhost', port=6379, password=None, db=0,
+def load(fp, host='localhost', port=6379, password=None, ssl=False, ssl_cert_reqs=None, db=0,
     empty=False, unix_socket_path=None, encoding='utf-8', use_expireat=False,
     streaming_backend=None,
 ):
     if have_streaming_load:
-        load_streaming(fp, host=host, port=port, password=password, db=db,
+        load_streaming(fp, host=host, port=port, password=password, ssl=ssl, ssl_cert_reqs=ssl_cert_reqs, db=db,
             empty=empty, unix_socket_path=unix_socket_path, encoding=encoding,
             use_expireat=use_expireat, streaming_backend=streaming_backend)
     else:
-        load_lump(fp, host=host, port=port, password=password, db=db,
+        load_lump(fp, host=host, port=port, password=password, ssl=ssl, ssl_cert_reqs=ssl_cert_reqs, db=db,
             empty=empty, unix_socket_path=unix_socket_path, encoding=encoding,
             use_expireat=use_expireat)
 
@@ -479,7 +480,10 @@ def _writer(r, p, key, type, value, ttl, expireat, use_expireat):
             p.sadd(key, element)
     elif type == 'zset':
         for element, score in value:
-            p.zadd(key, element, score)
+            # print(key, element, score)
+            # r.zadd(key,{add_val:score})
+            # r.zadd(key, add_val, scroe)
+            p.zadd(key, {element:score})
     elif type == 'hash':
         p.hmset(key, value)
     else:
